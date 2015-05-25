@@ -1,5 +1,4 @@
-
-#include "var.hpp"
+#include "var.h"
 
 genotype::~genotype(){}
 

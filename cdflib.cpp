@@ -7,7 +7,7 @@
 
 using namespace std;
 
-# include "cdflib.hpp"
+# include "cdflib.h"
 
 //****************************************************************************80
 

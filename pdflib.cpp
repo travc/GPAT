@@ -8,8 +8,8 @@
 
 using namespace std;
 
-# include "pdflib.hpp"
-# include "rnglib.hpp"
+# include "pdflib.h"
+# include "rnglib.h"
 
 //****************************************************************************80
 

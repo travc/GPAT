@@ -5,7 +5,7 @@
 
 using namespace std;
 
-# include "rnglib.hpp"
+# include "rnglib.h"
 
 //****************************************************************************80
 

@@ -1,6 +1,6 @@
 #include "Variant.h"
 #include "split.h"
-#include "pdflib.hpp"
+#include "pdflib.h"
 
 #include <string>
 #include <iostream>

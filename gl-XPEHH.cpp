@@ -1,7 +1,7 @@
 #include "Variant.h"
 #include "split.h"
-#include "cdflib.hpp"
-#include "pdflib.hpp"
+#include "cdflib.h"
+#include "pdflib.h"
 
 #include <string>
 #include <iostream>
