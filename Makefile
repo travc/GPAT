@@ -24,14 +24,15 @@ BIN_SOURCES = dumpContigsFromHeader.cpp \
 			  abba-baba.cpp \
 			  permuteGPAT++.cpp \
 
-CXX = g++
-CXXFLAGS = -O3 -D_FILE_OFFSET_BITS=64
-#CXXFLAGS = -O2
-#CXXFLAGS = -pedantic -Wall -Wshadow -Wpointer-arith -Wcast-qual
 
 INCLUDES = -I. -I$(VCFLIB_PATH) -I$(VCFLIB_PATH)/src -I$(VCFLIB_PATH)/tabixpp/htslib/
 LDINCLUDES = -L. -L$(VCFLIB_PATH) -L$(VCFLIB_PATH)/tabixpp/ -L$(VCFLIB_PATH)/tabixpp/htslib/
-LDFLAGS = -lvcflib -ltabix -lhts -lpthread -lz -lm
+
+CXX = g++
+CXXFLAGS = -O3 -D_FILE_OFFSET_BITS=64 $(INCLUDES)
+#CXXFLAGS = -O2
+#CXXFLAGS = -pedantic -Wall -Wshadow -Wpointer-arith -Wcast-qual
+LDFLAGS = $(LDINCLUDES) -lvcflib -ltabix -lhts -lpthread -lz -lm
 
 OBJECTS= $(SOURCES:.cpp=.o)
 HEADERS= $(SOURCES:.cpp=.h) $(EXTRA_HEADERS)
@@ -50,10 +51,10 @@ profiling:
 gprof:
 	$(MAKE) CXXFLAGS="$(CXXFLAGS) -pg" all
 
-$(OBJECTS): $(SOURCES) $(BIN_SOURCES) $(HEADERS)
+%.o: %.cpp $(HEADERS)
 	$(CXX) -c -o $@ $(@:.o=.cpp) $(INCLUDES) $(CXXFLAGS)
 
-$(BINS): $(VCFLIB_PATH)/libvcflib.a $(OBJECTS)
+$(VCFLIB_PATH)/bin/%: %.cpp $(VCFLIB_PATH)/libvcflib.a $(OBJECTS)
 	$(CXX) $(notdir $@).cpp $(OBJECTS) -o $@ $(INCLUDES) $(LDINCLUDES) $(LDFLAGS) $(CXXFLAGS)
 
 #test: $(BINS)
