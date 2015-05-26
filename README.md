@@ -25,3 +25,12 @@ That should just work.
 You could also put GPAT wherever you want.
 Just set `VCFLIB_PATH` in the `Makefile` to point to the location of ekg's vcflib.
 (You need a copy/clone of vcflib regardless.)
+
+## Improvements / Changes (currently only on `devel` branch)
+
+### pFst
+- Added the ability to take sample lists (`--target` and `--backgroud`) as a comma-separated list of sample names, or the filename of a file listing samples (one per line) either by index or name.  See the usage message.
+- Can now take the vcf input as a stream.
+- Quite a bit of minor cleanup.
+
+
