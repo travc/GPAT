@@ -122,13 +122,24 @@ void loadSampleList(const string & in_string, const bool string_is_filename, con
 }
 
 void getNonNullSamples(const vector<string> & sample_names, 
-            map<string, map<string, vector<string> > > & in_samples, 
+            const map<string, map<string, vector<string> > > & in_samples, 
             vector<map<string, vector<string> > > & out_samples){
     out_samples.clear();
+    map<string, map<string, vector<string> > >::const_iterator in_it;
+    map<string, vector<string> >::const_iterator fmt_it;
     for( vector<string>::const_iterator i = sample_names.begin(); i != sample_names.end(); ++i ){
-        string & gt = in_samples[*i]["GT"].front(); // @TCC should probably test if *i is actually in samples
-        if( gt != "." && gt != "./." ){
-            out_samples.push_back(in_samples[*i]);
+        in_it = in_samples.find(*i);
+        if( in_it != in_samples.end() ){
+            fmt_it = in_it->second.find("GT");
+            if( fmt_it == in_it->second.end() ){
+                cerr << "FATAL: Cannot find GT FORMAT value for sample " << *i << endl;
+                exit(1);
+            }else{
+                const string & gt = fmt_it->second.front();
+                if( gt.find('.') == string::npos ){ // Skip if any allele in genotype is uncalled
+                    out_samples.push_back(in_it->second);
+                }
+            }
         }
     }
 }
