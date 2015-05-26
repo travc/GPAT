@@ -39,7 +39,7 @@ void printSummary(char** argv){
          << "options:" << endl
          << "    -t, --target <sample_list>      see <sample_list>" << endl
          << "    -t, --background <sample_list>  see <sample_list>" << endl
-         << "    -y  --type <string>     genotype likelihood format ; genotypes: GP, GL or PL; pooled: PO" << endl
+         << "    -y  --type <string>     genotype likelihood format ; genotypes: GT (implies --counts), GP, GL or PL; pooled: PO" << endl
          << "    -f  --file <string>     a properly formatted VCF file (if omitted, uses stdin)" << endl
          << "    -d  --deltaaf <float>   skip sites where the difference in allele frequencies is less than deltaaf, default is zero" << endl
          << "    -r  --region <string>   a tabix compliant genomic range : seqid or seqid:start-end" << endl
@@ -123,26 +123,48 @@ void loadSampleList(const string & in_string, const bool string_is_filename, con
 
 void getNonNullSamples(const vector<string> & sample_names, 
             const map<string, map<string, vector<string> > > & in_samples, 
-            vector<map<string, vector<string> > > & out_samples){
-    out_samples.clear();
+            const string & type, // FORMAT field to check exists and isn't empty or "."; set to "" to not check
+            vector<map<string, vector<string> > > & out_samples,
+            bool clear_out_flag=false){
+    if( clear_out_flag ){
+        out_samples.clear();
+    }
     map<string, map<string, vector<string> > >::const_iterator in_it;
     map<string, vector<string> >::const_iterator fmt_it;
     for( vector<string>::const_iterator i = sample_names.begin(); i != sample_names.end(); ++i ){
         in_it = in_samples.find(*i);
-        if( in_it != in_samples.end() ){
-            fmt_it = in_it->second.find("GT");
+        if( in_it == in_samples.end() ){
+            cerr<<"FOO1"<<endl;
+            continue; // totally missing entry, skip
+        }
+        if( !type.empty() ){ // check type field exists if it is set
+            fmt_it = in_it->second.find(type);
             if( fmt_it == in_it->second.end() ){
-                cerr << "FATAL: Cannot find GT FORMAT value for sample " << *i << endl;
+                cerr << "FATAL: Cannot find " << type <<" FORMAT value for sample " << *i << endl;
                 exit(1);
-            }else{
-                const string & gt = fmt_it->second.front();
-                if( gt.find('.') == string::npos ){ // Skip if any allele in genotype is uncalled
-                    out_samples.push_back(in_it->second);
-                }
+            }
+            const string & tmp = fmt_it->second.front();
+            if( tmp.empty() || tmp == "." ){
+                continue; // empty or "." value, so skip sample
             }
         }
+        // check GT is fully called
+        fmt_it = in_it->second.find("GT");
+        if( fmt_it == in_it->second.end() ){
+            cerr << "FATAL: Cannot find GT FORMAT value for sample " << *i << endl;
+            exit(1);
+        }else{
+            const string & gt = fmt_it->second.front();
+            if( gt.find('.') != string::npos ){ // Skip if any allele in genotype is uncalled
+                cerr<<"FOO3"<<endl;
+                continue;
+            }
+        }
+        // made it this far, so good to add
+        out_samples.push_back(in_it->second);
     }
 }
+
 
 int main(int argc, char** argv) {
     // pooled or genotyped
@@ -278,11 +300,11 @@ int main(int argc, char** argv) {
         loadSampleList(background_optarg, tg_in_files, tg_by_sample_name, variantFile, background_names);
     }
 
-    // make a total_names list of samples
-    vector<string> total_names(background_names);
+    // make a list of samples which are in target but not in background (used to get total list)
+    vector<string> t_not_in_bg_names;
     for( vector<string>::const_iterator i=target_names.begin(); i != target_names.end(); ++i ){
-        if( find(total_names.begin(), total_names.end(), *i) == total_names.end() ){
-            total_names.push_back(*i);
+        if( find(background_names.begin(), background_names.end(), *i) == background_names.end() ){
+            t_not_in_bg_names.push_back(*i);
         }
     }
 
@@ -293,9 +315,9 @@ int main(int argc, char** argv) {
     cerr << "INFO: background argument: " << target_optarg << endl;
     cerr << "INFO: background samples (" << background_names.size() << "): ";
     printVector(cerr, background_names) << endl;
-    cerr << "INFO: total samples used (" << total_names.size() << "): ";
-    printVector(cerr, total_names) << endl;
-
+    cerr << "INFO: total samples used (" << background_names.size()+t_not_in_bg_names.size() << "): ";
+    printVector(cerr, t_not_in_bg_names);
+    printVector(cerr, background_names) << endl;
 
     if( !region.empty() ){
         if(! variantFile.setRegion(region)){
@@ -304,24 +326,18 @@ int main(int argc, char** argv) {
         }
     }
 
-    map<string, int> okayGenotypeLikelihoods;
-    okayGenotypeLikelihoods["PL"] = 1;
-    okayGenotypeLikelihoods["GT"] = 1;
-    okayGenotypeLikelihoods["PO"] = 1;
-    okayGenotypeLikelihoods["GL"] = 1;
-    okayGenotypeLikelihoods["GP"] = 1;
-
-    if(type == "GT"){
-        counts = 1;
-    }
-
-    if(type == "NA"){
-        cerr << "FATAL: failed to specify genotype likelihood format : PL,PO,GL,GP" << endl;
+    string okayGenotypeLiklihoods[] = {"GT","PL","PO","GL","GP"};
+    if( type.empty() ){
+        cerr << "FATAL: failed to specify genotype likelihood format : GT,PL,PO,GL,GP" << endl;
         printSummary(argv);
         return 1;
     }
-    if(okayGenotypeLikelihoods.find(type) == okayGenotypeLikelihoods.end()){
-        cerr << "FATAL: genotype likelihood is incorrectly formatted, only use: PL,PO,GL,GP" << endl;
+    if(type == "GT"){ // --type=GT implies --counts
+        counts = 1;
+    }
+    string * tmp_end = okayGenotypeLiklihoods+(sizeof(okayGenotypeLiklihoods)/sizeof(char*));
+    if( find(okayGenotypeLiklihoods, tmp_end, type) == tmp_end ){
+        cerr << "FATAL: genotype likelihood is incorrectly formatted, only use: GT,PL,PO,GL,GP" << endl;
         printSummary(argv);
         return 1;
     }    
@@ -334,11 +350,15 @@ int main(int argc, char** argv) {
             continue;
         }
 
-        vector < map< string, vector<string> > > target, background, total;
+        vector < map< string, vector<string> > > target; 
+        vector < map< string, vector<string> > > background; 
+        vector < map< string, vector<string> > > total; 
 
-        getNonNullSamples(target_names, var.samples, target);
-        getNonNullSamples(background_names, var.samples, background);
-        getNonNullSamples(total_names, var.samples, total);
+        getNonNullSamples(target_names, var.samples, type, target);
+        getNonNullSamples(background_names, var.samples, type, background);
+        total = background;
+        getNonNullSamples(t_not_in_bg_names, var.samples, type, total, false);
+
 
         zvar * populationTarget        ;
         zvar * populationBackground    ;
