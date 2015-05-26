@@ -8,6 +8,7 @@
 #include <iostream>
 #include <math.h>  
 #include <cmath>
+#include <stdexcept>
 #include <stdlib.h>
 #include <time.h>
 #include <stdio.h>
@@ -17,186 +18,284 @@ using namespace std;
 using namespace vcflib;
 
 void printVersion(void){
-  cerr << "INFO: version 1.0.0 ; date: April 2014 ; author: Zev Kronenberg; email : zev.kronenberg@utah.edu " << endl;
+    //cerr << "INFO: version 1.0.0 ; date: April 2014 ; author: Zev Kronenberg; email : zev.kronenberg@utah.edu " << endl;
+    // @TCC TODO
+    cerr << "INFO: version ???? " << endl;
 }
 
-void printHelp(void){
-  cerr << endl << endl;
-  cerr << "INFO: help" << endl;
-  cerr << "INFO: description:" << endl;
-  cerr << "     pFst is a probabilistic approach for detecting differences in allele frequencies between two populations." << endl << endl;
- 
 
-  cerr << "Output : 3 columns :     "    << endl;
-  cerr << "     1. seqid            "    << endl;
-  cerr << "     2. position         "    << endl;
-  cerr << "     3. pFst probability "    << endl  << endl;
-
-  cerr << "INFO: usage:  pFst --target 0,1,2,3,4,5,6,7 --background 11,12,13,16,17,19,22 --file my.vcf --deltaaf 0.1 --type PL" << endl;
-  cerr << endl;
-  cerr << "INFO: required: t,target     -- argument: a zero based comma separated list of target individuals corrisponding to VCF columns       "  << endl;
-  cerr << "INFO: required: b,background -- argument: a zero based comma separated list of background individuals corrisponding to VCF columns   "  << endl;
-  cerr << "INFO: required: f,file       -- argument: a properly formatted VCF.                                                                  "  << endl;
-  cerr << "INFO: required: y,type       -- argument: genotype likelihood format ; genotypes: GP, GL or PL; pooled: PO                           "  << endl;
-  cerr << "INFO: optional: d,deltaaf    -- argument: skip sites where the difference in allele frequencies is less than deltaaf, default is zero"  << endl;
-  cerr << "INFO: optional: r,region     -- argument: a tabix compliant genomic range : seqid or seqid:start-end                                 "  << endl;
-  cerr << "INFO: optional: c,counts     -- switch  : use genotype counts rather than genotype likelihoods to estimate parameters, default false "  << endl;
-
-  cerr << endl;
-
-  printVersion() ;
+void printSummary(char** argv){
+    cerr << "description: "
+         << "A probabilistic approach for detecting differences in allele frequencies between two populations" << endl
+         << endl;
+    cerr << "usage: " << argv[0] << " [options] --target <sample_list> --background <sample_list> --type <type> [--file <vcf file>]" << endl
+         << endl
+         << "  <sample_list> is either:" << endl
+         << "      (default behavior) a zero based comma separated list of samples indicies corresponding to VCF columns" << endl
+         << "      (with -S option)   a comma separated list of sample names" << endl
+         << "      (with -F option)   the name of a file listing sample indicies (one per line, # comments allowed)" << endl
+         << "      (with -SF option)  the name of a file listing sample names (one per line, # comments allowed)" << endl
+         << endl
+         << "options:" << endl
+         << "    -t, --target <sample_list>      see <sample_list>" << endl
+         << "    -t, --background <sample_list>  see <sample_list>" << endl
+         << "    -y  --type <string>     genotype likelihood format ; genotypes: GP, GL or PL; pooled: PO" << endl
+         << "    -f  --file <string>     a properly formatted VCF file (if omitted, uses stdin)" << endl
+         << "    -d  --deltaaf <float>   skip sites where the difference in allele frequencies is less than deltaaf, default is zero" << endl
+         << "    -r  --region <string>   a tabix compliant genomic range : seqid or seqid:start-end" << endl
+         << "    -c  --counts            use genotype counts rather than genotype likelihoods to estimate parameters, default false" << endl
+         << "    -S  --sample-names      all <sample_list> use sample names instead of indicies" << endl
+         << "    -F  --sample-files      all <sample_list> are the names of files listing samples" << endl
+         << endl
+         << "example:  pFst --target 0,1,2,3,4,5,6,7 --background 11,12,13,16,17,19,22 --file my.vcf --deltaaf 0.1 --type PL" << endl
+         << endl;
+    cerr << "INFO: optional: c,counts     -- switch  : use genotype counts rather than genotype likelihoods to estimate parameters, default false "  << endl;
+    cerr << "INFO: usage:  pFst --target 0,1,2,3,4,5,6,7 --background 11,12,13,16,17,19,22 --file my.vcf --deltaaf 0.1 --type PL" << endl;
+    cerr << endl;
+    printVersion() ;
 }
+
 
 double bound(double v){
-  if(v <= 0.00001){
-    return  0.00001;
-  }
-  if(v >= 0.99999){
-    return 0.99999;
-  }
-  return v;
-}
-
-void loadIndices(map<int, int> & index, string set){
-  
-  vector<string>  indviduals = split(set, ",");
-
-  vector<string>::iterator it = indviduals.begin();
-  
-  for(; it != indviduals.end(); it++){
-    index[ atoi( (*it).c_str() ) ] = 1;
-  }
+    if(v <= 0.00001){
+        return  0.00001;
+    }
+    if(v >= 0.99999){
+        return 0.99999;
+    }
+    return v;
 }
 
 double logLbinomial(double x, double n, double p){
+    double ans = lgamma(n+1)-lgamma(x+1)-lgamma(n-x+1) + x * log(p) + (n-x) * log(1-p);
+    return ans;
+}
 
-  double ans = lgamma(n+1)-lgamma(x+1)-lgamma(n-x+1) + x * log(p) + (n-x) * log(1-p);
-  return ans;
-    
+
+template <typename T>
+ostream & printVector(ostream & out, const vector<T> & v, const string & delim=" "){
+    for( size_t i=0; i<v.size(); ++i ){
+        if( i != 0 ){
+            out << delim;
+        }
+        out << v[i];
+    }
+    return out;
+}
+
+
+void loadSampleList(const string & in_string, const bool string_is_filename, const bool samples_by_name, const VariantCallFile & variantFile, 
+        vector<string> & samp_names_out){
+    vector<string> indviduals;
+    if( !string_is_filename ){
+        indviduals = split(in_string, ",");
+    }else{
+        // read individuals from file
+        string line;
+        ifstream fs(in_string.c_str());
+        while( getline(fs, line) ){
+            // strip '#' comments
+            line = line.substr(0, line.find_first_of('#'));
+            // trim trailing whitespace
+            line.erase(find_if(line.rbegin(), line.rend(), not1(ptr_fun<int, int>(isspace))).base(), line.end());
+            if( !line.empty() ){ // skip empty lines
+                indviduals.push_back(line);
+            }
+        }
+        fs.close();
+    }
+    int idx;
+    for( vector<string>::const_iterator i = indviduals.begin(); i != indviduals.end(); i++){
+        if( !samples_by_name ){ // list of indicies
+            idx = atoi( (*i).c_str() );
+            if( idx >= variantFile.sampleNames.size() ){
+                cerr << "FATAL: request sample index "<< idx << " but only " << variantFile.sampleNames.size() << " samples in input" << endl;
+                exit(1);
+            }
+            samp_names_out.push_back(variantFile.sampleNames[idx]);
+        }else{ // list of sample names
+            samp_names_out.push_back(*i);
+            vector<string>::const_iterator tmp_it = find(variantFile.sampleNames.begin(), variantFile.sampleNames.end(), *i);
+            if( tmp_it == variantFile.sampleNames.end() ){
+                cerr << "FATAL: cannot find sample '" << *i << "' in input" << endl;
+                exit(1);
+            }
+        }
+    }
+}
+
+void getNonNullSamples(const vector<string> & sample_names, 
+            map<string, map<string, vector<string> > > & in_samples, 
+            vector<map<string, vector<string> > > & out_samples){
+    out_samples.clear();
+    for( vector<string>::const_iterator i = sample_names.begin(); i != sample_names.end(); ++i ){
+        string & gt = in_samples[*i]["GT"].front(); // @TCC should probably test if *i is actually in samples
+        if( gt != "." && gt != "./." ){
+            out_samples.push_back(in_samples[*i]);
+        }
+    }
 }
 
 int main(int argc, char** argv) {
+    // pooled or genotyped
+    int pool = 0;
 
-  // pooled or genotyped
+    // the filename
+    string filename;
 
-  int pool = 0;
+    // set region to scaffold
+    string region; 
 
-  // the filename
+    // using vcflib; thanks to Erik Garrison 
+    VariantCallFile variantFile;
 
-  string filename = "NA";
+    // deltaaf is the difference of allele frequency we bother to look at 
+    string deltaaf ;
+    double daf  = 0;
 
-  // set region to scaffold
+    // use counts instead of likelihoods switch
+    int counts = 0;
 
-  string region = "NA"; 
+    // type pooled GL PL
+    string type = "NA";
 
-  // using vcflib; thanks to Erik Garrison 
+    const struct option longopts[] = {
+        {"version",            0, 0, 'v'},
+        {"help",               0, 0, 'h'},
+        {"counts",             0, 0, 'c'},
+        {"file",               1, 0, 'f'},
+        {"target",             1, 0, 't'},
+        {"background",         1, 0, 'b'},
+        {"sample-names",       1, 0, 'S'},
+        {"sample-files",       1, 0, 'F'},
+        {"deltaaf",            1, 0, 'd'},
+        {"region",             1, 0, 'r'},
+        {"type",               1, 0, 'y'},
+        {0,0,0,0}
+    };
 
-  VariantCallFile variantFile;
-
-  // zero based index for the target and background indivudals 
-  
-  map<int, int> it, ib;
-  
-  // deltaaf is the difference of allele frequency we bother to look at 
-
-  string deltaaf ;
-  double daf  = 0;
-
-  // 
-
-  int counts = 0;
-
-  // type pooled GL PL
-
-  string type = "NA";
-
-    const struct option longopts[] = 
-      {
-	{"version"   , 0, 0, 'v'},
-	{"help"      , 0, 0, 'h'},
-	{"counts"    , 0, 0, 'c'},
-        {"file"      , 1, 0, 'f'},
-	{"target"    , 1, 0, 't'},
-	{"background", 1, 0, 'b'},
-	{"deltaaf"   , 1, 0, 'd'},
-	{"region"    , 1, 0, 'r'},
-	{"type"      , 1, 0, 'y'},
-	{0,0,0,0}
-      };
+    string target_optarg;
+    string background_optarg;
+    bool tg_by_sample_name = false;
+    bool tg_in_files = false;
 
     int index;
     int iarg=0;
 
-    while(iarg != -1)
-      {
-	iarg = getopt_long(argc, argv, "r:d:t:b:f:y:chv", longopts, &index);
-	
-	switch (iarg)
-	  {
-	  case 'h':
-	    printHelp();
-	    return 0;
-	  case 'v':
-	    printVersion();
-	    return 0;
-	  case 'y':	    
-	    type = optarg;
-	    cerr << "INFO: genotype likelihoods set to: " << type << endl;
-	    if(type == "GT"){
-	      cerr << "INFO: using counts flag as GT was specified" << endl;
-	    }
-	    break;
-	  case 'c':
-	    cerr << "INFO: using genotype counts rather than genotype likelihoods" << endl;
-	    counts = 1;
-	    break;
-	  case 't':
-	    loadIndices(ib, optarg);
-	    cerr << "INFO: There are " << ib.size() << " individuals in the target" << endl;
-	    cerr << "INFO: target ids: " << optarg << endl;
-	    break;
-	  case 'b':
-	    loadIndices(it, optarg);
-	    cerr << "INFO: There are " << it.size() << " individuals in the background" << endl;
-	    cerr << "INFO: background ids: " << optarg << endl;
-	    break;
-	  case 'f':
-	    cerr << "INFO: File: " << optarg  <<  endl;
-	    filename = optarg;
-	    break;
-	  case 'd':
-	    cerr << "INFO: only scoring sites where the allele frequency difference is greater than: " << optarg << endl;
-	    deltaaf = optarg;
-	    daf = atof(deltaaf.c_str());	    
-	    break;
-	  case 'r':
-            cerr << "INFO: set seqid region to : " << optarg << endl;
-	    region = optarg; 
-	    break;
-	  default:
-	    break;
-	  }
-      }
+    while(true){
+        iarg = getopt_long(argc, argv, "r:d:t:b:f:y:chvSF", longopts, &index);
+        if( iarg == -1 ){
+            break;
+        }
 
-    
-    if(filename == "NA"){
-      cerr << "FATAL: did not specify the file\n";
-      printHelp();
-      exit(1);
-    }
-    
-    variantFile.open(filename);
-    
-    if(region != "NA"){
-      if(! variantFile.setRegion(region)){
-	cerr <<"FATAL: unable to set region" << endl;
-	return 1;
-      }
+        switch (iarg)
+        {
+
+            case 'v':
+                printVersion();
+                return 0;
+            case 'y':     
+                type = optarg;
+                cerr << "INFO: genotype likelihoods set to: " << type << endl;
+                if(type == "GT"){
+                    cerr << "INFO: using counts flag as GT was specified" << endl;
+                }
+                break;
+            case 'c':
+                cerr << "INFO: using genotype counts rather than genotype likelihoods" << endl;
+                counts = 1;
+                break;
+            case 't':
+                target_optarg = optarg;
+                break;
+            case 'b':
+                background_optarg = optarg;
+                break;
+            case 'S':
+                tg_by_sample_name = true;
+                break;
+            case 'F':
+                tg_in_files = true;
+                break;
+            case 'f':
+                cerr << "INFO: File: " << optarg  <<  endl;
+                filename = optarg;
+                break;
+            case 'd':
+                cerr << "INFO: only scoring sites where the allele frequency difference is greater than: " << optarg << endl;
+                deltaaf = optarg;
+                daf = atof(deltaaf.c_str());        
+                break;
+            case 'r':
+                cerr << "INFO: set seqid region to : " << optarg << endl;
+                region = optarg; 
+                break;
+
+            case 'h':
+            default:
+                printSummary(argv);
+                return 0;
+        }
     }
 
-    if (!variantFile.is_open()) {
-      exit(1);
+    // open variant file
+    try{
+        if( filename.empty() ){
+            variantFile.open(cin);
+        }else{
+            variantFile.open(filename);
+        }
+    }catch( const std::out_of_range& oor ){ // variantFile.open() throws out_of_range exception when file does not exit
+        cerr << "FATAL: failed to open variant file '" << filename << "'" << endl;
+        exit(1);
     }
+    if( !variantFile.is_open() ){
+        cerr << "FATAL: failed to open variant file '" << filename << "'" << endl;
+        exit(1);
+    }
+    vector<string> samples = variantFile.sampleNames;
+    int nsamples = samples.size();
+
+    // parse the target and background lists
+    vector<string> target_names;
+    if( target_optarg.empty() ){
+        cerr << "FATAL: Must provide targets" << endl;
+    }else{
+        loadSampleList(target_optarg, tg_in_files, tg_by_sample_name, variantFile, target_names);
+    }
+    vector<string> background_names;
+    if( background_optarg.empty() ){
+        cerr << "FATAL: Must provide background" << endl;
+    }else{
+        loadSampleList(background_optarg, tg_in_files, tg_by_sample_name, variantFile, background_names);
+    }
+
+    // make a total_names list of samples
+    vector<string> total_names(background_names);
+    for( vector<string>::const_iterator i=target_names.begin(); i != target_names.end(); ++i ){
+        if( find(total_names.begin(), total_names.end(), *i) == total_names.end() ){
+            total_names.push_back(*i);
+        }
+    }
+
+    // verbose output of sample names
+    cerr << "INFO: target argument: " << target_optarg << endl;
+    cerr << "INFO: target samples (" << target_names.size() << "): ";
+    printVector(cerr, target_names) << endl;
+    cerr << "INFO: background argument: " << target_optarg << endl;
+    cerr << "INFO: background samples (" << background_names.size() << "): ";
+    printVector(cerr, background_names) << endl;
+    cerr << "INFO: total samples used (" << total_names.size() << "): ";
+    printVector(cerr, total_names) << endl;
+
+
+    if( !region.empty() ){
+        if(! variantFile.setRegion(region)){
+            cerr <<"FATAL: unable to set region" << endl;
+            return 1;
+        }
+    }
+
     map<string, int> okayGenotypeLikelihoods;
     okayGenotypeLikelihoods["PL"] = 1;
     okayGenotypeLikelihoods["GT"] = 1;
@@ -205,166 +304,139 @@ int main(int argc, char** argv) {
     okayGenotypeLikelihoods["GP"] = 1;
 
     if(type == "GT"){
-      counts = 1;
+        counts = 1;
     }
 
     if(type == "NA"){
-      cerr << "FATAL: failed to specify genotype likelihood format : PL,PO,GL,GP" << endl;
-      printHelp();
-      return 1;
+        cerr << "FATAL: failed to specify genotype likelihood format : PL,PO,GL,GP" << endl;
+        printSummary(argv);
+        return 1;
     }
     if(okayGenotypeLikelihoods.find(type) == okayGenotypeLikelihoods.end()){
-      cerr << "FATAL: genotype likelihood is incorrectly formatted, only use: PL,PO,GL,GP" << endl;
-      printHelp();
-      return 1;
+        cerr << "FATAL: genotype likelihood is incorrectly formatted, only use: PL,PO,GL,GP" << endl;
+        printSummary(argv);
+        return 1;
     }    
 
     Variant var(variantFile);
 
-    vector<string> samples = variantFile.sampleNames;
-    int nsamples = samples.size();
-
     while (variantFile.getNextVariant(var)) {
 
-      if(var.alt.size() > 1){
-	continue;
-      }
-      
-        
-      vector < map< string, vector<string> > > target, background, total;
-	        
-	int index = 0;
-
-        for(int nsamp = 0; nsamp < nsamples; nsamp++){
-
-          map<string, vector<string> > sample = var.samples[ samples[nsamp]];
-
-	    if(sample["GT"].front() != "./."){
-	      if(it.find(index) != it.end() ){
-		target.push_back(sample);		
-		total.push_back(sample);		
-	      }
-	      if(ib.find(index) != ib.end()){
-		background.push_back(sample);
-		total.push_back(sample);		
-	      }
-	    }
-            
-	index += 1;
-	}
-	
-	zvar * populationTarget        ;
-	zvar * populationBackground    ;
-	zvar * populationTotal         ;
-
-	if(type == "PO"){
-	  populationTarget     = new pooled();
-          populationBackground = new pooled();
-          populationTotal      = new pooled();
-	}
-	if(type == "PL"){
-	  populationTarget     = new pl();
-	  populationBackground = new pl();
-	  populationTotal      = new pl();
-	}
-	if(type == "GL"){
-	  populationTarget     = new gl();
-	  populationBackground = new gl();
-	  populationTotal      = new gl();	  
-	}
-	if(type == "GP"){
-	  populationTarget     = new gp();
-	  populationBackground = new gp();
-	  populationTotal      = new gp();
-	}
-	if(type == "GT"){
-          populationTarget     = new gt();
-          populationBackground = new gt();
-          populationTotal      = new gt();
-        }	
-
-	populationTotal->loadPop(total          , var.sequenceName, var.position);	
-	populationTarget->loadPop(target        , var.sequenceName, var.position);
-	populationBackground->loadPop(background, var.sequenceName, var.position);
-
-	if(populationTarget->npop < 2 || populationBackground->npop < 2){
-          delete populationTarget;
-	  delete populationBackground;
-          delete populationTotal;
-
-	  continue;
-	}
-
-	populationTotal->estimatePosterior();	
-	populationTarget->estimatePosterior();
-	populationBackground->estimatePosterior();
-
-	if(populationTarget->alpha == -1 || populationBackground->alpha == -1){
-	  delete populationTarget;
-	  delete populationBackground;
-	  delete populationTotal;
-
-
-          continue;
+        if(var.alt.size() > 1){
+            continue;
         }
 
-	if(counts == 1){
+        vector < map< string, vector<string> > > target, background, total;
 
-	  populationTotal->alpha  = 0.001 + populationTotal->nref;
-	  populationTotal->beta   = 0.001 + populationTotal->nalt;
-	  
-	  populationTarget->alpha = 0.001 + populationTarget->nref;
-	  populationTarget->beta  = 0.001 + populationTarget->nalt;
+        getNonNullSamples(target_names, var.samples, target);
+        getNonNullSamples(background_names, var.samples, background);
+        getNonNullSamples(total_names, var.samples, total);
 
-	  populationBackground->alpha = 0.001 + populationBackground->nref;
-	  populationBackground->beta  = 0.001 + populationBackground->nalt;
+        zvar * populationTarget        ;
+        zvar * populationBackground    ;
+        zvar * populationTotal         ;
 
+        if(type == "PO"){
+            populationTarget     = new pooled();
+            populationBackground = new pooled();
+            populationTotal      = new pooled();
+        }
+        if(type == "PL"){
+            populationTarget     = new pl();
+            populationBackground = new pl();
+            populationTotal      = new pl();
+        }
+        if(type == "GL"){
+            populationTarget     = new gl();
+            populationBackground = new gl();
+            populationTotal      = new gl();    
+        }
+        if(type == "GP"){
+            populationTarget     = new gp();
+            populationBackground = new gp();
+            populationTotal      = new gp();
+        }
+        if(type == "GT"){
+            populationTarget     = new gt();
+            populationBackground = new gt();
+            populationTotal      = new gt();
+        }   
 
-	}
+        populationTotal->loadPop(total          , var.sequenceName, var.position);  
+        populationTarget->loadPop(target        , var.sequenceName, var.position);
+        populationBackground->loadPop(background, var.sequenceName, var.position);
 
-	double populationTotalEstAF       = bound(populationTotal->beta      / (populationTotal->alpha      + populationTotal->beta)     );
-	double populationTargetEstAF      = bound(populationTarget->beta     / (populationTarget->alpha     + populationTarget->beta)    );
-	double populationBackgroundEstAF  = bound(populationBackground->beta / (populationBackground->alpha + populationBackground->beta));
+        if(populationTarget->npop < 2 || populationBackground->npop < 2){
+            delete populationTarget;
+            delete populationBackground;
+            delete populationTotal;
+            continue;
+        }
 
-	// cout << populationTotalEstAF << "\t" << populationTotal->af << endl;
+        populationTotal->estimatePosterior();   
+        populationTarget->estimatePosterior();
+        populationBackground->estimatePosterior();
 
-	// x, n, p
-	double null = logLbinomial(populationTarget->beta, (populationTarget->alpha + populationTarget->beta),  populationTotalEstAF) +
-	  logLbinomial(populationBackground->beta, (populationBackground->alpha + populationBackground->beta),  populationTotalEstAF) ;
-	double alt  = logLbinomial(populationTarget->beta, (populationTarget->alpha + populationTarget->beta),  populationTargetEstAF) +
-	  logLbinomial(populationBackground->beta, (populationBackground->alpha + populationBackground->beta),  populationBackgroundEstAF) ;
-		
-	double l = 2 * (alt - null);
-	
-	if(l <= 0){
-	  delete populationTarget;
-	  delete populationBackground;
-	  delete populationTotal;
+        if(populationTarget->alpha == -1 || populationBackground->alpha == -1){
+            delete populationTarget;
+            delete populationBackground;
+            delete populationTotal;
+            continue;
+        }
 
+        if(counts == 1){
 
-	  continue;
-	}
+            populationTotal->alpha  = 0.001 + populationTotal->nref;
+            populationTotal->beta   = 0.001 + populationTotal->nalt;
 
-	int     which = 1;
-	double  p ;
-	double  q ;
-	double  x  = l;
-	double  df = 1;
-	int     status;
-	double  bound ;
-	
-	cdfchi(&which, &p, &q, &x, &df, &status, &bound );
-	
-	cout << var.sequenceName << "\t"  << var.position << "\t" << 1-p << endl ;
-	
-	delete populationTarget;
-	delete populationBackground;
-	delete populationTotal;
-	
-	populationTarget     = NULL;
-	populationBackground = NULL;
-	populationTotal      = NULL;
+            populationTarget->alpha = 0.001 + populationTarget->nref;
+            populationTarget->beta  = 0.001 + populationTarget->nalt;
+
+            populationBackground->alpha = 0.001 + populationBackground->nref;
+            populationBackground->beta  = 0.001 + populationBackground->nalt;
+        }
+
+        double populationTotalEstAF       = bound(populationTotal->beta      / (populationTotal->alpha      + populationTotal->beta)     );
+        double populationTargetEstAF      = bound(populationTarget->beta     / (populationTarget->alpha     + populationTarget->beta)    );
+        double populationBackgroundEstAF  = bound(populationBackground->beta / (populationBackground->alpha + populationBackground->beta));
+
+        // cout << populationTotalEstAF << "\t" << populationTotal->af << endl;
+
+        // x, n, p
+        double null = logLbinomial(populationTarget->beta, (populationTarget->alpha + populationTarget->beta),  populationTotalEstAF) +
+            logLbinomial(populationBackground->beta, (populationBackground->alpha + populationBackground->beta),  populationTotalEstAF) ;
+        double alt  = logLbinomial(populationTarget->beta, (populationTarget->alpha + populationTarget->beta),  populationTargetEstAF) +
+            logLbinomial(populationBackground->beta, (populationBackground->alpha + populationBackground->beta),  populationBackgroundEstAF) ;
+
+        double l = 2 * (alt - null);
+
+        if(l <= 0){
+            delete populationTarget;
+            delete populationBackground;
+            delete populationTotal;
+            continue;
+        }
+
+        int     which = 1;
+        double  p ;
+        double  q ;
+        double  x  = l;
+        double  df = 1;
+        int     status;
+        double  bound ;
+
+        cdfchi(&which, &p, &q, &x, &df, &status, &bound );
+
+        cout << var.sequenceName << "\t"  << var.position << "\t" << 1-p << endl ;
+
+        delete populationTarget;
+        delete populationBackground;
+        delete populationTotal;
+
+        populationTarget     = NULL;
+        populationBackground = NULL;
+        populationTotal      = NULL;
 
     }
-    return 0;		    
+    return 0;           
 }
