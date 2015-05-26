@@ -3,7 +3,7 @@ A version Zev Kronenberg's GPAT++ (Genotype-Phenotype Association Toolkit)
 See: https://github.com/jewmanchue/vcflib/wiki  
 And the original repository: https://github.com/jewmanchue/vcflib  
 
-I've just separated out GPAT++ from ekg's original vcflib code.
+I've separated out GPAT++ from ekg's original vcflib code.
 It still depends in vcflib, but can be maintained independently and built using updated versions of vcflib.  
 In fact, GPAT can be included as a submodule to vcflib, as my fork of vcflib does: https://github.com/travc/vcflib
 
