@@ -23,6 +23,7 @@ BIN_SOURCES = dumpContigsFromHeader.cpp \
 			  plotHaps.cpp \
 			  abba-baba.cpp \
 			  permuteGPAT++.cpp \
+			  vcfpopsizesfilter.cpp \
 
 
 INCLUDES = -I. -I$(VCFLIB_PATH) -I$(VCFLIB_PATH)/src -I$(VCFLIB_PATH)/tabixpp/htslib/
