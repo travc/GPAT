@@ -134,7 +134,6 @@ void getNonNullSamples(const vector<string> & sample_names,
     for( vector<string>::const_iterator i = sample_names.begin(); i != sample_names.end(); ++i ){
         in_it = in_samples.find(*i);
         if( in_it == in_samples.end() ){
-            cerr<<"FOO1"<<endl;
             continue; // totally missing entry, skip
         }
         if( !type.empty() ){ // check type field exists if it is set
@@ -156,7 +155,6 @@ void getNonNullSamples(const vector<string> & sample_names,
         }else{
             const string & gt = fmt_it->second.front();
             if( gt.find('.') != string::npos ){ // Skip if any allele in genotype is uncalled
-                cerr<<"FOO3"<<endl;
                 continue;
             }
         }
