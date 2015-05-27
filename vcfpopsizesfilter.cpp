@@ -235,6 +235,7 @@ int main(int argc, char** argv) {
     // open variant file
     try{
         if( vcf_filename.empty() ){
+            cerr << "Reading VCF from stdin..." <<endl;
             variantFile.open(cin);
         }else{
             variantFile.open(vcf_filename);
