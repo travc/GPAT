@@ -38,7 +38,7 @@ void printSummary(char** argv){
          << endl
          << "options:" << endl
          << "    -t, --target <sample_list>      see <sample_list>" << endl
-         << "    -t, --background <sample_list>  see <sample_list>" << endl
+         << "    -b, --background <sample_list>  see <sample_list>" << endl
          << "    -y  --type <string>     genotype likelihood format ; genotypes: GT (implies --counts), GP, GL or PL; pooled: PO" << endl
          << "    -f  --file <string>     a properly formatted VCF file (if omitted, uses stdin)" << endl
          << "    -d  --deltaaf <float>   skip sites where the difference in allele frequencies is less than deltaaf, default is zero" << endl
